@@ -1,19 +1,25 @@
-[build-system]
-requires = ["flit_core >=2,<4"]
-build-backend = "flit_core.buildapi"
+[project]
+name = "tiddlyserver"
+authors = [
+ {name = "Jonathan Heathcote", email = "mail@jhnet.co.uk"},
+ {name = "Stephen Gaito", email = "stephen@perceptisys.co.uk"},
+]
+description = "A minimal personal TiddlyWiki sync server with Git support."
+#url = "https://github.com/stephengaito/tiddlyserver"
+license = {text = "GPL3+"}
+requires-python = ">=3.10"
 
-[tool.flit.metadata]
-module = "tiddlyserver"
-author = "Jonathan Heathcote"
-author-email = "mail@jhnet.co.uk"
-home-page = "https://github.com/mossblaser/tiddlyserver"
-classifiers = [ "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",]
-requires = [
+dependencies = [
     "flask ~= 2.0",
     "waitress ~= 2.0",
     "GitPython ~= 3.0",
 ]
 
-[tool.flit.scripts]
+[project.scripts]
 tiddlyserver = "tiddlyserver.server:main"
 make-tiddlywiki-reenable-plugin-downloads-plugin = "tiddlyserver.make_reenable_plugin_downloads_plugin:main"
+
+[build-system]
+requires = ["pdm-pep517>=1.0.0"]
+build-backend = "pdm.pep517.api"
+
