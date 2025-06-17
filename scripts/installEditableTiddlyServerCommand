@@ -24,7 +24,7 @@ CMD_SCRIPT
 ##########################################################################
 
 installScript tiddlyserver
-#installScript lgtCreateDb
+installScript make-tiddlywiki-reenable-plugin-downloads-plugin
 
 
 echo ""
