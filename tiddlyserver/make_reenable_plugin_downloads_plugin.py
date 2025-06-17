@@ -15,9 +15,7 @@ import argparse
 
 import json
 
-import re
-
-from html import unescape
+import sys
 
 from tiddlyserver.tiddler_embedding import HTMLTagOffsetFinder
 
@@ -27,23 +25,38 @@ from tiddlyserver.server import EMPTY_WITH_TIDDLYWEB
 def extract_core_official_plugin_library_tiddler_and_version(
   empty_html_path: Path,
 ) -> tuple[dict[str, str], str]:
+  officialPluginLib = None
+  version           = None
+
   finder = HTMLTagOffsetFinder([
-    ("div", {"title": "$:/core"}),
+    ("script", {"class": "tiddlywiki-tiddler-store"}),
   ])
   empty_html = empty_html_path.read_text()
   finder.feed(empty_html)
 
   _tag, attrs, start, end = finder.matches[0][0]
-  core_pre_tag = empty_html[start:end]
-  core_json = unescape(
-    re.fullmatch(r"\s*<pre>(.*)</pre>\s*$", core_pre_tag, re.DOTALL
-    ).group(1)
-  )
-  core = json.loads(core_json)
+  tiddlerStore = empty_html[start:end]
+  jsonStore = json.loads(tiddlerStore)
+  for aLibrary in jsonStore :
+    if 'title' in aLibrary :
+      if 'core' in aLibrary['title'] :
+        if 'version' in aLibrary :
+          version = aLibrary['version']
+        if 'text' in aLibrary :
+          if 'tiddlers' in aLibrary['text'] :
+            libText = aLibrary['text'].strip("'\"")
+            libJson = json.loads(libText)
+            if "$:/config/OfficialPluginLibrary" in libJson['tiddlers'] :
+              officialPluginLib = libJson['tiddlers']["$:/config/OfficialPluginLibrary"]  # noqa
+    if version and officialPluginLib :
+      break
+  if not version or not officialPluginLib :
+    print("ERROR: Could not find the officialPluginLib")
+    sys.exit(1)
 
   return (
-    core["tiddlers"]["$:/config/OfficialPluginLibrary"],
-    attrs["version"],
+    officialPluginLib,
+    version,
   )
 
 def make_plugin(empty_html_path: Path) -> dict[str, str]:
