@@ -52,7 +52,7 @@ def title_to_filename_stub(title: str) -> Path:
 
   # Replace all (runs of) nontrivial characters with _
   parts = [
-    re.sub(r"[^a-zA-Z0-9 _-]+", "_", part)
+    re.sub(r"[^a-zA-Z0-9_-]+", "_", part)
     for part in parts
   ]
 
