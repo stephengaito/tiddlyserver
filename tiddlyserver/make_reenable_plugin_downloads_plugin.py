@@ -68,15 +68,22 @@ def make_plugin(empty_html_path: Path) -> dict[str, str]:
   official_plugin_library["tiddlyserver.git"] = "no"
 
   return {
-    "title": "$:/plugins/mossblaser/reenable-plugin-downloads",
     "author": "mossblaser",
-    "version": core_version,
-    "core-version": f"=={core_version}",
+    "dependents": "",
     "description": "Renable the plugin download UI when TiddlyWeb is enabled",
+    "list": "",
+    "name": "ReEnableOfficialPlugins",
+    "plugin-priority": "20",
     "plugin-type": "plugin",
-    "plugin-priority": 20,
+    # parent-plugin: none?
+    # source: none?
+    "text": json.dumps(official_plugin_library),
+    "title": "$:/plugins/mossblaser/reenable-plugin-downloads",
     "type": "application/json",
-    "text": json.dumps(official_plugin_library)
+    "version": core_version,
+    # not documented
+    "core-version": f"=={core_version}",
+    "stability": "STABILITY_2_STABLE",
   }
 
 def main() -> None:

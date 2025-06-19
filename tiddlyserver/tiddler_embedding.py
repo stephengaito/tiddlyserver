@@ -2,6 +2,8 @@
 Routines for inserting tiddlers into an ``empty.html`` TiddlyWiki file.
 """
 
+import json
+
 from typing import Iterable, Optional
 
 import logging
@@ -133,6 +135,13 @@ def get_title_and_subtitle(
 
   return (title, subtitle)
 
+def serialise_as_json_tiddler(tiddler: dict[str, str]) -> str:
+  """
+  Given a Tiddler, return the JSON for the 'tiddlywiki-tiddler-store'
+  serialisation format used by TiddlyWiki.
+  """
+  return json.dumps(tiddler)
+
 def serialise_as_text_tiddler(tiddler: dict[str, str]) -> str:
   """
   Given a Tiddler, return the HTML for the 'text' serialisation format used
@@ -165,7 +174,8 @@ def embed_tiddlers_into_empty_html(
     [
       ("title", {}),
       ("noscript", {}),
-      ("div", {"id": "storeArea"}),
+      ("script", {"class": "tiddlywiki-tiddler-store"}),
+      # ("div", {"id": "storeArea"}),
     ]
   )
   finder.feed(html)
@@ -204,13 +214,24 @@ def embed_tiddlers_into_empty_html(
       )
 
   # Add tiddlers
-  serialised_tiddlers = "\n".join(
+  #
+  # In the v5.2.x style tiddler store, each tiddler MUST be separated by a
+  # comma and be on a line of its own.
+  #
+  serialised_tiddlers = ",\n".join(
     map(
-      serialise_as_text_tiddler,
+      serialise_as_json_tiddler,
       sorted(tiddlers, key=lambda t: t.get("title")),
     )
   )
-  insertions.append((store_area_end, serialised_tiddlers))
+  #
+
+  # In the v5.2.x style tiddler store, the end of the "tiddler store" (an
+  # array of JSON encoded strings separated by commas and on their own
+  # lines) IS NOT the start of the `</srcipt>` tag but is actually two
+  # characters (a space/newline and a `]`) BEFORE the `</script> end tag.
+
+  insertions.append((store_area_end - 2, ',\n' + serialised_tiddlers))
 
   return modify_string(html, insertions, deletions)
 

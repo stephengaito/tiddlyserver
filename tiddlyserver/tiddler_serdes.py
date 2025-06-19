@@ -232,11 +232,13 @@ def read_tiddler(directory: Path, title: str) -> dict[str, str]:
   )
 
 def read_all_tiddlers(
-  directory: Path, include_text: bool = True
+  directory: Path, extraTiddlers: list = [], include_text: bool = True
 ) -> Iterable[dict[str, str]]:
   """
   Read all of the tiddlers in the named directory.
   """
+  for aTid in extraTiddlers :
+    yield aTid
   for tid_filename in directory.glob("**/*.tid"):
     yield deserialise_tid(tid_filename, include_text)
   for json_filename in directory.glob("**/*.json"):

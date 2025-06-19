@@ -4,211 +4,127 @@ TiddlyWeb API.
 """
 
 import argparse
-
-import inspect
-
-import shutil
-
+import os
 from pathlib import Path
+import signal
+import sys
+import yaml
 
-from flask import Flask, Blueprint, Response, \
-  current_app, jsonify, abort, request
+from waitress import serve, wasyncore
 
-import tiddlyserver
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.middleware.shared_data import SharedDataMiddleware
 
-from tiddlyserver.tiddler_serdes import (
-  read_all_tiddlers,
-  read_tiddler,
-  write_tiddler,
-  delete_tiddler,
-)
+from tiddlyserver.tiddly_wiki_app import create_app
+from tiddlyserver.default_app import createBaseApp
 
-from tiddlyserver.tiddler_embedding import embed_tiddlers_into_empty_html
+# from tiddlyserver.wsgiLogger import WSGILogger
 
-from tiddlyserver.tiddler_hash import tiddler_hash
+# from logging.config import dictConfig
 
-from tiddlyserver.git import (
-  init_repo_if_needed,
-  commit_files_if_changed,
-)
+def wikiDie(mesg, aWiki) :
+  print(f"{mesg} in the wiki definition")
+  print("-------------------------------------")
+  print(yaml.dump(aWiki))
+  print("-------------------------------------")
+  sys.exit(1)
 
-EMPTY_WITH_TIDDLYWEB = Path(inspect.getfile(tiddlyserver)).parent / "empty_with_tiddlyweb.html"  # noqa
+def checkAWiki(aWiki) :
+  if 'title' not in aWiki :
+    wikiDie("The title key must be supplied", aWiki)
+  if 'url' not in aWiki :
+    wikiDie("The url key must be supplied", aWiki)
+  if 'dir' not in aWiki :
+    wikiDie("The dir key must be supplied", aWiki)
+  if 'desc' not in aWiki :
+    aWiki['desc'] = ""
+  if 'useGit' not in aWiki :
+    aWiki['useGit'] = False
 
-bp = Blueprint("tiddlyserver", __name__)
+def configDie(mesg, config) :
+  print(f"{mesg} in the 'wikiConfig.yaml' configuration file")
+  print("-------------------------------------")
+  print(yaml.dump(config))
+  print("-------------------------------------")
+  sys.exit(1)
 
-def tiddler_git_filter(tiddler: dict[str, str]) -> bool:
-  """
-  Return True only for Tiddlers which should be included in Git.
-  """
-  shouldFilter = True
-
-  # Ignore drafts
-  shouldFilter = shouldFilter and tiddler.get("draft.of", None) is None
-
-  # Skip the storylist
-  shouldFilter = shouldFilter and tiddler.get("title") != "$:/StoryList"
-
-  # Allow manual override
-  shouldFilter = shouldFilter and tiddler.get("tiddlyserver.git") != "no"
-
-  return (shouldFilter)
-
-@bp.route('/')
-def get_index():
-  """
-  Return a copy of the empty.html with all tiddlers in the tiddler directory
-  pre-loaded.
-  """
-  empty_html_filename: Path = current_app.config["empty_html_filename"]
-  tiddler_dir: Path = current_app.config["tiddler_dir"]
-
-  empty_html = empty_html_filename.read_text()
-
-  tiddlers = sorted(
-    read_all_tiddlers(tiddler_dir),
-    key=lambda t: t.get("title", ""),
-  )
-
-  html = embed_tiddlers_into_empty_html(empty_html, tiddlers)
-
-  return Response(html, content_type="text/html")
-
-@bp.route('/status')
-def get_status():
-  """
-  Bare-minimum response which minimises UI cruft like usernames and login
-  screens.
-  """
-  return {
-    "space": {"recipe": "all"},
-    "username": "GUEST",
-    "read_only": False,
-    "anonymous": True,
-  }
-
-@bp.route('/recipes/all/tiddlers.json')
-def get_skinny_tiddlers():
-  """
-  Return the JSON-ified non-text fields of all local tiddler files.
-
-  NB: We don't emulate the slightly quirky TiddlyWeb JSON format here since
-  the TiddlyWiki implementation will cope just fine with a plain JSON object
-  describing a tiddler's fields.
-  """
-  tiddler_dir = current_app.config["tiddler_dir"]
-  skinny_tiddlers = list(read_all_tiddlers(tiddler_dir, include_text=False))
-  return jsonify(skinny_tiddlers)
-
-@bp.route('/recipes/all/tiddlers/<path:title>')
-def get_tiddler(title):
-  """
-  Read a tiddler.
-
-  NB: We assume the 'all' space (reported by the /status endpoint).
-
-  NB: We don't emulate the slightly quirky TiddlyWeb JSON format here since
-  the TiddlyWiki implementation will cope just fine with a plain JSON object
-  describing a tiddler's fields.
-  """
-  tiddler_dir = current_app.config["tiddler_dir"]
-
-  try:
-    return jsonify(read_tiddler(tiddler_dir, title))
-  except FileNotFoundError:
-    abort(404)
-
-@bp.route('/recipes/all/tiddlers/<path:title>', methods=["PUT"])
-def put_tiddler(title):
-  """
-  Store (or modify) a tiddler.
-  """
-  tiddler_dir = current_app.config["tiddler_dir"]
-  use_git = current_app.config["use_git"]
-
-  tiddler = request.get_json()
-
-  # Undo silly TiddlyWeb formatting
-  tiddler.update(tiddler.pop("fields", {}))
-  if "tags" in tiddler:
-    tiddler["tags"] = " ".join(f"[[{tag}]]" for tag in tiddler.get("tags", []))
-
-  # Mandatory for TiddlyWeb but (but unused by this implementation)
-  tiddler["bag"] = "bag"
-
-  # Set revision to hash of Tiddler contents
-  tiddler.pop("revision", None)
-  hash = tiddler_hash(tiddler)
-  tiddler["revision"] = revision = hash
-
-  # Sanity check
-  assert title == tiddler.get("title")
-
-  changed_files = write_tiddler(tiddler_dir, tiddler)
-  if use_git and tiddler_git_filter(tiddler):
-    commit_files_if_changed(tiddler_dir, changed_files, f"Updated {title}")
-
-  etag = f'"bag/{title}/{revision}:{hash}"'
-  headers = {"Etag": etag}
-
-  return "", 204, headers
-
-@bp.route('/bags/bag/tiddlers/<path:title>', methods=["DELETE"])
-def remove_tiddler(title):
-  """
-  Delete a tiddler.
-  """
-  tiddler_dir = current_app.config["tiddler_dir"]
-  use_git = current_app.config["use_git"]
-
-  deleted_files = delete_tiddler(tiddler_dir, title)
-
-  if use_git:
-    commit_files_if_changed(tiddler_dir, deleted_files, f"Deleted {title}")
-
-  if deleted_files:
-    return ""
-  else:
-    abort(404)
-
-def create_app(tiddler_dir: Path, use_git: bool) -> Flask:
-  """
-  Create an :py:class:`flask.Flask` application for the TiddlyServer.
-
-  Parameters
-  ==========
-  tiddler_dir : Path
-    The directory in which tiddlers will be stored.
-  use_git : bool
-    If True, will ensure the tiddler directory is a git repository and
-    auto-commit changes to that repository.
-  """
-  # Create tiddler directory and empty HTML if either doesn't exist yet
-  if not tiddler_dir.is_dir():
-    tiddler_dir.mkdir(parents=True)
-
-  empty_html_filename = tiddler_dir / "empty.html"
-  if not empty_html_filename.is_file():
-    shutil.copy(
-      EMPTY_WITH_TIDDLYWEB,
-      empty_html_filename,
+def checkConfig(config) :
+  if 'template' not in config :
+    config['template'] = os.path.join(
+      os.path.abspath(os.path.dirname(__file__)),
+      "defaultWiki.html"
     )
-  if use_git:
-    init_repo_if_needed(tiddler_dir)
-    commit_files_if_changed(
-      tiddler_dir,
-      [empty_html_filename],
-      "Updated empty.html"
+  else :
+    config['template'] = os.path.join(
+      config['baseDir'],
+      config['template']
     )
+  if 'host' not in config : config['host'] = "127.0.0.1"
+  if 'port' not in config : config['port'] = "8000"
+  if 'verbose' not in config : config['verbose'] = False
+  if 'static' not in config :
+    configDie("The static key MUST be supplied", config)
+  if 'url' not in config['static'] :
+    configDie("The static::url key must be supplied", config)
+  if 'dir' not in config['static'] :
+    configDie("The static::dir key must be supplied", config)
+  if 'wikis' not in config :
+    configDie("The wikis key MUST be supplied", config)
+  if config['wikis'] is None :
+    configDie("The wikis key MUST be a list of wikis", config)
+  if not isinstance(config['wikis'], list) :
+    configDie("The wikis key MUST be a list of wikis", config)
+  if len(config['wikis']) < 1 :
+    configDie(
+      "You MUST supply at least one multi-wiki in the wikis key",
+      config
+    )
+  for aWiki in config['wikis'] : checkAWiki(aWiki)
 
-  # Create app
-  app = Flask(__name__)
-  app.register_blueprint(bp)
-  app.config["empty_html_filename"] = empty_html_filename
-  app.config["tiddler_dir"] = tiddler_dir.resolve()
-  app.config["use_git"] = use_git
-  return app
+def loadConfig(baseDir) :
+  config = {}
+
+  try :
+    with open(os.path.join(baseDir, "wikiConfig.yaml")) as cFile :
+      config = yaml.safe_load(cFile.read())
+      if not config : config = {}
+  except Exception as err :
+    print(f"Could not open the wikiConfig.yaml file in the base dir: {baseDir}")  # noqa
+    print(repr(err))
+    sys.exit(1)
+
+  config['baseDir'] = baseDir
+  checkConfig(config)
+
+  if config['verbose'] :
+    print("-------------------------------------")
+    print(yaml.dump(config))
+    print("-------------------------------------")
+  return config
+
+def sigtermHandler(signum, frame) :
+
+  # simply call sys.exit as this will raise a SystemExit exception which
+  # is then "handled" by Waitress and if we care, can be handled by our
+  # app.
+
+  # consider sending and waiting for a Blinker signal followed by an
+  # ExitNow exception. This would provide a softer shutdown sequence.
+
+  # try raising the more specific ExitNow exception defined by
+  # waitress.wasyncore.... most of our application does not care... BUT
+  # our database update/insert operations should be protected.
+
+  raise wasyncore.ExitNow()
+
+  sys.exit(0)
+
+shutDownExceptions = (wasyncore.ExitNow, KeyboardInterrupt, SystemExit)
 
 def main():
+
+  signal.signal(signal.SIGTERM, sigtermHandler)
+
   parser = argparse.ArgumentParser(
     description="""
       A personal (i.e. unauthenticated) server for TiddlyWiki which
@@ -217,57 +133,90 @@ def main():
   )
 
   parser.add_argument(
-    "tiddler_dir",
+    "baseDir",
     nargs="?",
     type=Path,
     default=Path(),
     help="""
-      The directory to store all tiddlers. Defaults to the current
-      working directory. In addition to the wiki, this directory must
-      also contain a file called `empty.html` containing an *empty*
-      TiddlyWiki with the nothing more than the TiddlyWeb plugin
-      installed. If no such file exists, a suitable wiki will be copied
-      automatically.
+      The base directory for all Multi-TiddlyWikis to store all tiddlers.
+      Defaults to the current working directory.
+
+      This directory MUST contain the wikiConfig.yaml configuration. It
+      may, in addition, also contain a file called `empty.html` containing
+      the base *empty* TiddlyWiki with the nothing more than the TiddlyWeb
+      plugin installed.
     """
   )
 
   parser.add_argument(
     "--host",
     type=str,
-    default="127.0.0.1",
     help="""
-      The host/IP for the server to listen on. Defaults to $(default)s.
+      The host/IP for the server to listen on.
+      Overrides any default or host configured in wikiConfig.yaml.
     """
   )
 
   parser.add_argument(
     "--port",
-    type=int,
-    default=8000,
+    type=str,
     help="""
-      The port to listen on. Defaults to %(default)d.
-    """
-  )
-
-  parser.add_argument(
-    "--no-git", "-G",
-    action="store_true",
-    default=False,
-    help="""
-      If given, do not track changes to tiddlers using git.
+      The port to listen on.
+      Overrides any default or port configured in wikiConfig.yaml.
     """
   )
 
   args = parser.parse_args()
 
-  tiddler_dir = args.tiddler_dir
-  use_git = not args.no_git
+  baseDir = os.path.abspath(args.baseDir)
+  config = loadConfig(baseDir)
 
-  app = create_app(tiddler_dir, use_git)
+  if args.host : config['host'] = args.host
+  if args.port : config['port'] = int(args.port)
 
-  from waitress import serve
-  print(f"Serving on: http://{args.host}:{args.port}/")
-  serve(app, host=args.host, port=args.port, threads=1)
+  baseDir = Path(baseDir)
+  print(f"BaseDir: {baseDir}")
+
+  tiddlyWikis = {}
+  for aWiki in config['wikis'] :
+    anApp = create_app(
+      baseDir, Path(aWiki['dir']), aWiki['url'], aWiki['useGit']
+    )
+    tiddlyWikis[aWiki['url']] = anApp
+
+  baseApp = createBaseApp(config)
+
+  staticDir = baseDir / config['static']['dir']
+  print(f"StaticDir: {staticDir}")
+
+  if not staticDir.is_dir() :
+    staticDir.mkdir(parents=True)
+
+  staticApp = SharedDataMiddleware(baseApp, {
+    config['static']['url'] :
+      os.path.join(baseDir, config['static']['dir'])
+  })
+
+  dispApp = DispatcherMiddleware(staticApp, tiddlyWikis)
+
+  # app = WSGILogger(
+  #   dispApp, mesg="Base logger",
+  #   keys=['PATH_INFO']
+  # )
+
+  print("\nYour Waitress will serve you on:")
+  print(f"  http://{config['host']}:{config['port']}/")
+
+  try :
+    serve(
+      dispApp,
+      host=config['host'],
+      port=int(config['port'])
+    )
+  except shutDownExceptions :
+    pass
+
+  print("\nYour Waitress has left")
 
 if __name__ == "__main__":
   main()
