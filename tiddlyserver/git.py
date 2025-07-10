@@ -4,7 +4,7 @@ in a directory in a Git respository.
 """
 
 from pathlib import Path
-
+import shlex
 from subprocess import run, DEVNULL
 
 
@@ -64,7 +64,7 @@ def commit_files_if_changed(
 
   if changes_to_commit:
     run(
-      ["git", "commit", "--quiet", "--message", message],
+      ["git", "commit", "--quiet", "--message", shlex.quote(message)],
       cwd=directory,
       check=True,
     )
