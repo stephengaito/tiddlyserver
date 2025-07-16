@@ -62,18 +62,10 @@ def tiddler_git_filter(tiddler: dict[str, str]) -> bool:
 #     print(request.url)
 #     print(request.headers)
 
-@bp.route('/')
-def get_index():
-  """
-  Return a copy of the empty.html with all tiddlers in the tiddler directory
-  pre-loaded.
-  """
-  # print(current_app.config['wiki_url'])
-  # print("appRoute: /")
-
-  empty_html_filename: Path = current_app.config["empty_html_filename"]
-  tiddler_dir: Path = current_app.config["tiddler_dir"]
-  wiki_url: str = current_app.config['wiki_url']
+def reBuildTiddlyWiki(config) :
+  empty_html_filename: Path = config["empty_html_filename"]
+  tiddler_dir: Path = config["tiddler_dir"]
+  wiki_url: str = config['wiki_url']
 
   empty_html = empty_html_filename.read_text()
 
@@ -92,7 +84,18 @@ def get_index():
     key=lambda t: t.get("title", ""),
   )
 
-  html = embed_tiddlers_into_empty_html(empty_html, tiddlers)
+  return embed_tiddlers_into_empty_html(empty_html, tiddlers)
+
+@bp.route('/')
+def get_index():
+  """
+  Return a copy of the empty.html with all tiddlers in the tiddler directory
+  pre-loaded.
+  """
+  # print(current_app.config['wiki_url'])
+  # print("appRoute: /")
+
+  html = reBuildTiddlyWiki(current_app.config)
 
   return Response(html, content_type="text/html")
 

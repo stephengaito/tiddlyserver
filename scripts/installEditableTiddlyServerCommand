@@ -24,6 +24,8 @@ CMD_SCRIPT
 ##########################################################################
 
 installScript tiddlyserver
+installScript tiddlypacker
+installScript tiddlyunpacker
 installScript make-tiddlywiki-reenable-plugin-downloads-plugin
 
 

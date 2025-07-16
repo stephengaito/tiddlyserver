@@ -18,7 +18,9 @@ dependencies = [
 ]
 
 [project.scripts]
-tiddlyserver = "tiddlyserver.server:main"
+tiddlyserver   = "tiddlyserver.server:main"
+tiddlypacker   = "tiddlyserver.packer:pack"
+tiddlyunpacker = "tiddlyserver.packer:unpack"
 make-tiddlywiki-reenable-plugin-downloads-plugin = "tiddlyserver.make_reenable_plugin_downloads_plugin:main"
 
 [build-system]
