@@ -5,8 +5,6 @@ TiddlyWeb API.
 
 import inspect
 
-import shutil
-
 from pathlib import Path
 
 # import yaml
@@ -35,8 +33,6 @@ from tiddlyserver.git import (
 
 # from tiddlyserver.wsgiLogger import WSGILogger
 
-EMPTY_WITH_TIDDLYWEB = Path(inspect.getfile(tiddlyserver)).parent / "empty_with_tiddlyweb.html"  # noqa
-
 bp = Blueprint("tiddlyserver", __name__)
 
 def tiddler_git_filter(tiddler: dict[str, str]) -> bool:
@@ -62,29 +58,38 @@ def tiddler_git_filter(tiddler: dict[str, str]) -> bool:
 #     print(request.url)
 #     print(request.headers)
 
-def reBuildTiddlyWiki(config) :
-  empty_html_filename: Path = config["empty_html_filename"]
-  tiddler_dir: Path = config["tiddler_dir"]
-  wiki_url: str = config['wiki_url']
+def packTiddlyWiki(
+  empty_html_filename, tiddler_dir, wiki_url=None
+) :
 
   empty_html = empty_html_filename.read_text()
 
-  customPathPrefix = {
-    'title': '$:/config/tiddlyweb/host',
-    'text':  f'$protocol$//$host${wiki_url}/'
-  }
+  extraTiddlers = []
+  if wiki_url :
+    customPathPrefix = {
+      'title': '$:/config/tiddlyweb/host',
+      'text':  f'$protocol$//$host${wiki_url}/'
+    }
+    extraTiddlers.append(customPathPrefix)
 
   # print(yaml.dump(customPathPrefix))
 
   tiddlers = sorted(
     read_all_tiddlers(
       tiddler_dir,
-      extraTiddlers=[ customPathPrefix ]
+      extraTiddlers=extraTiddlers
     ),
     key=lambda t: t.get("title", ""),
   )
 
   return embed_tiddlers_into_empty_html(empty_html, tiddlers)
+
+def unpackTiddlyWiki(
+  html_filename,
+  tiddler_dir,
+  base_html_filename,
+) :
+  pass
 
 @bp.route('/')
 def get_index():
@@ -95,7 +100,11 @@ def get_index():
   # print(current_app.config['wiki_url'])
   # print("appRoute: /")
 
-  html = reBuildTiddlyWiki(current_app.config)
+  html = packTiddlyWiki(
+    Path(current_app.config["empty_html_filename"]),
+    Path(current_app.config["tiddler_dir"]),
+    wiki_url=str(current_app.config['wiki_url'])
+  )
 
   return Response(html, content_type="text/html")
 
@@ -196,9 +205,7 @@ def remove_tiddler(title):
   else:
     abort(404)
 
-def create_app(
-  baseDir: Path, tiddler_dir: Path, tiddler_url: str, use_git: bool
-) -> Flask:
+def create_app(aWiki) -> Flask:
   """
   Create an :py:class:`flask.Flask` application for the TiddlyServer.
 
@@ -216,41 +223,33 @@ def create_app(
   """
 
   # make the tiddler_dir relative to the baseDir
-  tiddler_dir = baseDir / tiddler_dir
+  tiddler_dir = Path(aWiki['dir'])
+  tiddler_url = aWiki['url']
   print(f"Tiddler: {tiddler_url}\n  from dir: {tiddler_dir}")
 
   # Create tiddler directory if it doesn't exist yet
   if not tiddler_dir.is_dir():
     tiddler_dir.mkdir(parents=True)
 
-  # check to see if there is an emptyHtml in the base directory
-  emptyHtml = EMPTY_WITH_TIDDLYWEB
-  baseEmpty = baseDir / "empty.html"
-  if baseEmpty.is_file() :
-    emptyHtml = baseEmpty
-
   # create the empty HTML if it doesn't exist yet
-  empty_html_filename = tiddler_dir / "empty.html"
-  if not empty_html_filename.is_file():
-    shutil.copy(
-      emptyHtml,
-      empty_html_filename,
-    )
+  empty_html_filename = Path(aWiki['emptyHtml'])
+  base_html_filename  = Path(aWiki['baseHtml'])
 
-  if use_git:
+  if aWiki['useGit'] :
     init_repo_if_needed(tiddler_dir)
     commit_files_if_changed(
       tiddler_dir,
-      [empty_html_filename],
-      "Updated empty.html"
+      [empty_html_filename, base_html_filename],
+      "Updated empty.html and base.html"
     )
 
   # Create app
   tiddlerApp = Flask(__name__)
   tiddlerApp.register_blueprint(bp)
   tiddlerApp.config["empty_html_filename"] = empty_html_filename
+  tiddlerApp.config["base_html_filename"]  = base_html_filename
   tiddlerApp.config["tiddler_dir"] = tiddler_dir.resolve()
-  tiddlerApp.config["use_git"] = use_git
+  tiddlerApp.config["use_git"] = aWiki['useGit']
   tiddlerApp.config['wiki_url'] = tiddler_url
 
   # loggerApp = WSGILogger(

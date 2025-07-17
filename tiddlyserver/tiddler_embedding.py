@@ -235,3 +235,6 @@ def embed_tiddlers_into_empty_html(
 
   return modify_string(html, insertions, deletions)
 
+def extract_tiddlers_from_html(html) :
+  tiddlers = {}
+  return tiddlers

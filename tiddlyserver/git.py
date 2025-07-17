@@ -24,10 +24,21 @@ def init_repo_if_needed(directory: Path) -> bool:
   if p.returncode == 0:
     # We're in a git repository, stop here
     return False
-  else:
-    p = run(["git", "init"], cwd=directory)
-    p.check_returncode()
-    return True
+
+  # ensure there is a .gitignore file which matches our usage
+  gitIgnore = directory / '.gitignore'
+  gitIgnore.write_text("""
+Draft*
+system/StoryList*
+  """)
+
+  p = run(["git", "init", "--initial-branch", "main"], cwd=directory)
+  p.check_returncode()
+  p = run(["git", "add", "-A"], cwd=directory)
+  p.check_returncode()
+  p = run(["git", "commit", "--message", '"initial commit"'], cwd=directory)
+  p.check_returncode()
+  return True
 
 def commit_files_if_changed(
   directory: Path, filenames: list[Path], message: str

@@ -6,10 +6,10 @@
   <body>
     <h1>Multi-TiddlyWiki webs</h1>
     <ul>
-    {% for aWiki in wikis %}
+    {% for aWikiKey in wikiOrder %}
       <li>
-        <a href="{{ aWiki.url }}">{{ aWiki.title }}</a>
-        <p>{{ aWiki.desc }}</p>
+        <a href="{{ wikis[aWikiKey].url }}">{{ wikis[aWikiKey].title }}</a>
+        <p>{{ wikis[aWikiKey].desc }}</p>
       </li>
     {% endfor %}
     </ul>

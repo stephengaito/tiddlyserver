@@ -10,7 +10,7 @@ import signal
 import sys
 
 from tiddlyserver.configuration import loadConfig
-from tiddlyserver.tiddly_wiki_app import reBuildTiddlyWiki
+from tiddlyserver.tiddly_wiki_app import packTiddlyWiki
 
 class ExitNow(Exception) :
   def __init__(self) :
@@ -35,32 +35,35 @@ def sigtermHandler(signum, frame) :
 
 shutDownExceptions = (ExitNow, KeyboardInterrupt, SystemExit)
 
-def getArgsLoadConfig() :
+def getArgsLoadConfig(desc) :
   signal.signal(signal.SIGTERM, sigtermHandler)
 
-  parser = argparse.ArgumentParser(
-    description="""
-      A tool to (re)build a complete and portable tiddlyWiki from a
-      tiddlyServer's collection of tiddlers.
-    """
-  )
+  parser = argparse.ArgumentParser(description=desc)
 
   parser.add_argument(
-    "baseDir",
+    "tiddlyDir",
     nargs="?",
     type=Path,
     default=Path(),
     help="""
-      The base directory for all Multi-TiddlyWikis to store all tiddlers.
+      The directory for a single tiddlyServer tiddlyWiki.
+
       Defaults to the current working directory.
 
-      This directory MUST contain the wikiConfig.yaml configuration. It
-      may, in addition, also contain a file called `empty.html` containing
-      the base *empty* TiddlyWiki with the nothing more than the TiddlyWeb
-      plugin installed.
+      This directory MUST contain BOTH the `empty.html` and `base.html` files.
+
+      The `base.html` file is the `empty.html` WITHOUT the associated
+      TiddlyWeb plugin.
     """
   )
 
+  parser.add_argument(
+    'htmlPath',
+    type=Path,
+    help="""
+      The path to the tiddlyWiki html file to be (un)packed.
+    """
+  )
   args = parser.parse_args()
 
   baseDir = os.path.abspath(args.baseDir)
@@ -68,14 +71,28 @@ def getArgsLoadConfig() :
 
 def pack() :
   print("Packing")
-  
-  config = getArgsLoadConfig()
 
-  html = reBuildTiddlyWiki(config)
+  config = getArgsLoadConfig("""
+      A tool to (re)build a complete and portable tiddlyWiki from a
+      tiddlyServer's collection of tiddlers.
+    """)
+
+  html = packTiddlyWiki(config)
 
   with open('aFile', 'w') as htmlFile :
     htmlFile.write(html)
 
-def unpack() : 
+def unpack() :
   print("Unpacking")
-  print("   not yet implemented")
+
+  config = getArgsLoadConfig("""
+      A tool to unpack an existing tiddlyWiki into a tiddlyServer's
+      collection of tiddlers.
+  """)
+
+  html = None
+  with open('aFile') as htmlFile :
+    html = htmlFile.read()
+
+  unpackTiddlyWiki(config, html)
+

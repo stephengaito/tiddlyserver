@@ -100,11 +100,8 @@ def main():
   print(f"BaseDir: {baseDir}")
 
   tiddlyWikis = {}
-  for aWiki in config['wikis'] :
-    anApp = create_app(
-      baseDir, Path(aWiki['dir']), aWiki['url'], aWiki['useGit']
-    )
-    tiddlyWikis[aWiki['url']] = anApp
+  for aWiki in config['wikis'].values() :
+    tiddlyWikis[aWiki['url']] = create_app(aWiki)
 
   baseApp = createBaseApp(config)
 

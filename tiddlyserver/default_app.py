@@ -7,7 +7,7 @@ from flask import Flask, render_template_string
 def createBaseApp(config) :
 
   wikis = deepcopy(config['wikis'])
-  for aWiki in wikis :
+  for aWiki in wikis.values() :
     aWiki['desc'] = markdown(aWiki['desc'])
 
   app = Flask(__name__)
@@ -18,7 +18,9 @@ def createBaseApp(config) :
     resultHtml = "No wikis found"
     with open(config['template']) as tFile :
       resultHtml = render_template_string(
-        tFile.read(), wikis=config['wikis']
+        tFile.read(),
+        wikis=config['wikis'],
+        wikiOrder=config['wikiOrder']
       )
     return resultHtml
 
