@@ -8,6 +8,7 @@ from pathlib import Path
 import os
 import signal
 import sys
+import yaml
 
 from tiddlyserver.configuration import loadConfig
 from tiddlyserver.tiddly_wiki_app import packTiddlyWiki
@@ -41,20 +42,25 @@ def getArgsLoadConfig(desc) :
   parser = argparse.ArgumentParser(description=desc)
 
   parser.add_argument(
-    "tiddlyDir",
-    nargs="?",
+    "baseDir",
     type=Path,
-    default=Path(),
     help="""
-      The directory for a single tiddlyServer tiddlyWiki.
+      The base directory for all of the Multi-TiddlyWikis.
 
       Defaults to the current working directory.
 
-      This directory MUST contain BOTH the `empty.html` and `base.html` files.
+      This directory MUST contain the 'wikiConfig.yaml' file.
 
-      The `base.html` file is the `empty.html` WITHOUT the associated
-      TiddlyWeb plugin.
     """
+  )
+
+  parser.add_argument(
+    "wikiKey",
+    type=str,
+    help="""
+      The key of the wiki to pack. This key must be contained in the
+      dictionary of wikis in the `wikiConfig.yaml` file.
+      """
   )
 
   parser.add_argument(
@@ -67,19 +73,29 @@ def getArgsLoadConfig(desc) :
   args = parser.parse_args()
 
   baseDir = os.path.abspath(args.baseDir)
-  return loadConfig(baseDir)
+  return (args, loadConfig(baseDir))
 
 def pack() :
   print("Packing")
 
-  config = getArgsLoadConfig("""
+  args, config = getArgsLoadConfig("""
       A tool to (re)build a complete and portable tiddlyWiki from a
       tiddlyServer's collection of tiddlers.
     """)
 
-  html = packTiddlyWiki(config)
+  if args.wikiKey not in config['wikis'] :
+    print(f"The wikiKey {args.wikiKey} could not be found in the configuration")  # noqa
+    print("-----------------------------------")
+    print(yaml.dump(config))
+    print("-----------------------------------")
+    sys.exit(1)
 
-  with open('aFile', 'w') as htmlFile :
+  theWiki = config['wikis'][args.wikiKey]
+  html = packTiddlyWiki(
+    Path(theWiki['baseHtml']), Path(theWiki['dir'])
+  )
+
+  with open(args.htmlPath, 'w') as htmlFile :
     htmlFile.write(html)
 
 def unpack() :
