@@ -1,0 +1,27 @@
+[project]
+name = "tiddlyServer"
+authors = [
+ {name = "Jonathan Heathcote", email = "mail@jhnet.co.uk"},
+ {name = "Stephen Gaito", email = "stephen@perceptisys.co.uk"},
+]
+description = "A minimal personal TiddlyWiki sync server with Git support which can preload large TiddlyWikis."
+#url = "https://github.com/stephengaito/tiddlyServer"
+license = {text = "GPL3+"}
+requires-python = ">=3.10"
+
+dependencies = [
+    "markdown>=3.8.1",
+    "pyyaml>=6.0.2",
+    "uvicorn>=0.35.0",
+    "starlette>=0.47.2",
+]
+
+[project.scripts]
+tiddlyServer   = "tiddlyServer.server:main"
+tiddlyPacker   = "tiddlyServer.packer:pack"
+tiddlyUnpacker = "tiddlyServer.packer:unpack"
+
+[build-system]
+requires = ["pdm-pep517>=1.0.0"]
+build-backend = "pdm.pep517.api"
+
