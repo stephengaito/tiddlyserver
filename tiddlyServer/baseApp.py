@@ -12,7 +12,7 @@ from starlette.responses import HTMLResponse
 from starlette.requests import Request
 from starlette.staticfiles import StaticFiles
 
-from tiddlyServer.types import WikiDef, WikiDefs
+from tiddlyServer.types import WikiDefs
 from tiddlyServer.tiddlyWikiApp import createTiddlyWikiApp
 
 def createBaseApp(

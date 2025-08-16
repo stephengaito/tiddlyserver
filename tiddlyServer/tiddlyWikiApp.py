@@ -73,9 +73,9 @@ def getIndex(request : Request) -> HTMLResponse :
   # print("appRoute: /")
 
   html = packTiddlyWiki(
-    request.app.state.config["emptyHtmlFilename"],
-    request.app.state.config["tiddlerDir"],
-    wikiUrl=str(request.app.state.config['wikiUrl'])
+    request.app.state.emptyHtmlFilename,
+    request.app.state.tiddlerDir,
+    wikiUrl=str(request.app.state.wikiUrl)
   )
 
   return HTMLResponse(html)
@@ -104,9 +104,9 @@ def getSkinnyTiddlers(request : Request) -> JSONResponse :
   the TiddlyWiki implementation will cope just fine with a plain JSON object
   describing a tiddler's fields.
   """
-  tiddlerDir = request.app.state.config["tiddlerDir"]
+  tiddlerDir = request.app.state.tiddlerDir
   skinnyTiddlers = list(readAllTiddlers(tiddlerDir, includeText=False))
-  return JSONResponse(json.dumps(skinnyTiddlers))
+  return JSONResponse(skinnyTiddlers)
 
 appRoutes.append(Route('/recipes/all/tiddlers.json', getSkinnyTiddlers))
 
@@ -120,19 +120,17 @@ def getTiddler(request : Request, title : str) -> Response :
   the TiddlyWiki implementation will cope just fine with a plain JSON object
   describing a tiddler's fields.
   """
-  tiddlerDir = request.app.state.config["tiddlerDir"]
+  tiddlerDir = request.app.state.tiddlerDir
 
   try:
-    return JSONResponse(
-      json.dumps(readTiddler(tiddlerDir, title))
-    )
+    return JSONResponse(readTiddler(tiddlerDir, title))
   except FileNotFoundError:
     return Response("", status_code=404)
 
 async def putTiddler(request : Request, title : str) -> Response:
   # Store (or modify) a tiddler.
 
-  tiddlerDir = request.app.state.config["tiddlerDir"]
+  tiddlerDir = request.app.state.tiddlerDir
 
   tiddlerDict : dict[str, Any] = await request.json()
 
@@ -194,7 +192,7 @@ def removeTiddler(request : Request) -> Response :
   Delete a tiddler.
   """
   title = request.path_params['title']
-  tiddlerDir = request.app.state.config["tiddlerDir"]
+  tiddlerDir = request.app.state.tiddlerDir
 
   deletedFiles = deleteTiddler(tiddlerDir, title)
 
