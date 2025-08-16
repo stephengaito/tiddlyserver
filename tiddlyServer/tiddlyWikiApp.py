@@ -15,7 +15,7 @@ from starlette.responses import Response, HTMLResponse, JSONResponse
 from starlette.requests import Request
 from starlette.routing import Route
 
-from tiddlyServer.types import Tiddler, TiddlerList
+from tiddlyServer.types import Tiddler, TiddlerList, WikiDef
 
 from tiddlyServer.tiddlerSerDes import readAllTiddlers, readTiddler, \
   writeTiddler, deleteTiddler
@@ -207,7 +207,7 @@ appRoutes.append(Route(
   '/bags/bag/tiddlers/{title:path}', removeTiddler, methods=["DELETE"]
 ))
 
-def createApp(aWiki : dict[str, str]) -> Starlette :
+def createTiddlyWikiApp(aWiki : WikiDef) -> Starlette :
   """
   Create an Starlette application for the TiddlyServer.
 

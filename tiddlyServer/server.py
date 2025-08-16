@@ -10,16 +10,17 @@ import signal
 import sys
 # import yaml
 
-from starlette.applications import Starlette
+import uvicorn
 
-from tiddlyServer.tiddlyWikiApp import createApp
-from tiddlyServer.defaultApp import createBaseApp
+from tiddlyServer.baseApp import createBaseApp
 from tiddlyServer.configuration import loadConfig
 
 # from tiddlyserver.wsgiLogger import WSGILogger
 
 # from logging.config import dictConfig
 
+class ExitNow(Exception) :
+  pass
 
 def sigtermHandler(signum, frame) :
 
@@ -34,11 +35,11 @@ def sigtermHandler(signum, frame) :
   # waitress.wasyncore.... most of our application does not care... BUT
   # our database update/insert operations should be protected.
 
-  raise wasyncore.ExitNow()
+  raise ExitNow()
 
   sys.exit(0)
 
-shutDownExceptions = (wasyncore.ExitNow, KeyboardInterrupt, SystemExit)
+shutDownExceptions = (ExitNow, KeyboardInterrupt, SystemExit)
 
 def main():
 
@@ -96,43 +97,26 @@ def main():
   baseDir = Path(baseDir)
   print(f"BaseDir: {baseDir}")
 
-  tiddlyWikis = {}
-  for aWiki in config['wikis'].values() :
-    tiddlyWikis[aWiki['url']] = createApp(aWiki)
-
-  baseApp = createBaseApp(config)
-
-  staticDir = baseDir / config['static']['dir']
-  print(f"StaticDir: {staticDir}")
-
-  if not staticDir.is_dir() :
-    staticDir.mkdir(parents=True)
-
-  staticApp = SharedDataMiddleware(baseApp, {
-    config['static']['url'] :
-      os.path.join(baseDir, config['static']['dir'])
-  })
-
-  dispApp = DispatcherMiddleware(staticApp, tiddlyWikis)
+  baseApp = createBaseApp(baseDir, config)
 
   # app = WSGILogger(
   #   dispApp, mesg="Base logger",
   #   keys=['PATH_INFO']
   # )
 
-  print("\nYour Waitress will serve you on:")
+  print("\nYour Uvicorn will serve you on:")
   print(f"  http://{config['host']}:{config['port']}/")
 
   try :
-    serve(
-      dispApp,
+    uvicorn.run(
+      baseApp,
       host=config['host'],
       port=int(config['port'])
     )
   except shutDownExceptions :
     pass
 
-  print("\nYour Waitress has left")
+  print("\nYour Uvicorn has left")
 
 if __name__ == "__main__":
   main()

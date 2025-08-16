@@ -10,12 +10,11 @@ import signal
 import sys
 import yaml
 
-from tiddlyserver.configuration import loadConfig
-from tiddlyserver.tiddly_wiki_app import packTiddlyWiki
+from tiddlyServer.configuration import loadConfig
+from tiddlyServer.tiddlyWikiApp import packTiddlyWiki, unpackTiddlyWiki
 
 class ExitNow(Exception) :
-  def __init__(self) :
-    super.__init()
+  pass
 
 def sigtermHandler(signum, frame) :
 
