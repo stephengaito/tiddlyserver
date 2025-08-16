@@ -2,15 +2,14 @@
 Routines for inserting tiddlers into an ``empty.html`` TiddlyWiki file.
 """
 
-import json
-
-from typing import Iterable, Optional
-
-import logging
+from typing import Optional, cast
 
 from html import escape
 from html.parser import HTMLParser
+import json
+import logging
 
+from tiddlyServer.types import Tiddler, Tiddlers
 
 class HTMLTagOffsetFinder(HTMLParser):
   """
@@ -29,18 +28,19 @@ class HTMLTagOffsetFinder(HTMLParser):
   The character offsets of the start of each line fed to this class.
   """
 
-  _tag_stack: list[tuple[str, set[tuple[str, str]], int]]
+  _tag_stack: list[tuple[str, set[tuple[str, str | None ]], int]]
   """
   Stack of tags the parser is currently inside. Each entry in the stack is a
   (tag, attrs, start_offset).
   """
 
-  matches: list[list[tuple[str, dict[str, str], int, int]]]
+  matches: list[list[tuple[str, dict[str, str | None], int, int]]]
   """
   All offsets for matching tags, one list for each pattern supplied. Each
   entry in the stack is a (tag, attrs, start_offset, end_offset).
   """
 
+  # to_find IS NOT a Tiddler....
   def __init__(self, to_find: list[tuple[str, dict[str, str]]]) -> None:
     """
     Find the start and end offsets of all tags listed in the 'to_find'
@@ -64,12 +64,16 @@ class HTMLTagOffsetFinder(HTMLParser):
 
     super().feed(string)
 
-  def get_offset(self) -> None:
+  def get_offset(self) -> int:
     line, col = self.getpos()
     return self._lineno_to_offset[line - 1] + col
 
-  def handle_starttag(self, tag: str, attrs: list[tuple[str, str]]) -> None:
-    start_offset = self.get_offset() + len(self.get_starttag_text())
+  def handle_starttag(
+    self, tag: str, attrs: list[tuple[str, str | None]]
+  ) -> None:
+    startTagText = self.get_starttag_text()
+    if not startTagText : startTagText = ""
+    start_offset = self.get_offset() + len(startTagText)
     self._tag_stack.append((tag, set(attrs), start_offset))
 
   def handle_endtag(self, end_tag: str) -> None:
@@ -105,21 +109,24 @@ def modify_string(
       raise ValueError("Overlapping insertions or deletions")
 
   parts = []
-  for change in sorted(deletions + insertions[::-1], key=lambda x: x[0], reverse=True):  # noqa
+  changes : list[tuple[int, int | str]] = []
+  changes = cast(list[tuple[int, int | str]], deletions) + \
+    cast(list[tuple[int, int | str]], insertions[::-1])
+  for change in sorted(changes, key=lambda x: x[0], reverse=True):  # noqa
     if isinstance(change[1], str):  # Insertion
       offset, substring = change
       parts.append(string[offset:])
-      parts.append(substring)
+      parts.append(cast(str, substring))
       string = string[:offset]
     else:  # Deletion
       start, end = change
-      parts.append(string[end:])
+      parts.append(string[cast(int, end):])
       string = string[:start]
   parts.append(string)
   return "".join(reversed(parts))
 
-def get_title_and_subtitle(
-  tiddlers: Iterable[dict[str, str]]
+def getTitleAndSubtitle(
+  tiddlers: Tiddlers
 ) -> tuple[Optional[str], Optional[str]]:
   """
   Get the wiki title and subtitles defined in the given set of tiddlers (if a
@@ -135,14 +142,14 @@ def get_title_and_subtitle(
 
   return (title, subtitle)
 
-def serialise_as_json_tiddler(tiddler: dict[str, str]) -> str:
+def serialiseAsJsonTiddler(tiddler: Tiddler) -> str:
   """
   Given a Tiddler, return the JSON for the 'tiddlywiki-tiddler-store'
   serialisation format used by TiddlyWiki.
   """
   return json.dumps(tiddler)
 
-def serialise_as_text_tiddler(tiddler: dict[str, str]) -> str:
+def serialiseAsTextTiddler(tiddler: Tiddler) -> str:
   """
   Given a Tiddler, return the HTML for the 'text' serialisation format used
   by TiddlyWiki.
@@ -162,8 +169,8 @@ class UnexpectedHTMLStructureError(ValueError):
   version supplied?
   """
 
-def embed_tiddlers_into_empty_html(
-  html: str, tiddlers: list[dict[str, str]]
+def embedTiddlersIntoEmptyHtml(
+  html: str, tiddlers: Tiddlers
 ) -> str:
   """
   Given the HTML of an empty TiddlyWiki, embed the provided tiddlers.
@@ -193,7 +200,7 @@ def embed_tiddlers_into_empty_html(
   deletions = []
 
   # Change <title> as necessary
-  title, subtitle = get_title_and_subtitle(tiddlers)
+  title, subtitle = getTitleAndSubtitle(tiddlers)
   if title is not None:
     if subtitle is not None:
       title += f" \N{EM DASH} {subtitle}"
@@ -218,12 +225,12 @@ def embed_tiddlers_into_empty_html(
   # In the v5.2.x style tiddler store, each tiddler MUST be separated by a
   # comma and be on a line of its own.
   #
-  serialised_tiddlers = ",\n".join(
-    map(
-      serialise_as_json_tiddler,
-      sorted(tiddlers, key=lambda t: t.get("title")),
-    )
-  )
+  def sortByTitle(aTiddler : Tiddler ) -> str :
+    return aTiddler.get("title", "")
+  serialised_tiddlers = []
+  for aTiddler in  sorted(tiddlers, key=sortByTitle) :
+    serialised_tiddlers.append(serialiseAsJsonTiddler(aTiddler))
+  serialised_tiddlers_str = ",\n".join(serialised_tiddlers)
   #
 
   # In the v5.2.x style tiddler store, the end of the "tiddler store" (an
@@ -231,10 +238,10 @@ def embed_tiddlers_into_empty_html(
   # lines) IS NOT the start of the `</srcipt>` tag but is actually two
   # characters (a space/newline and a `]`) BEFORE the `</script> end tag.
 
-  insertions.append((store_area_end - 2, ',\n' + serialised_tiddlers))
+  insertions.append((store_area_end - 2, ',\n' + serialised_tiddlers_str))
 
   return modify_string(html, insertions, deletions)
 
-def extract_tiddlers_from_html(html) :
-  tiddlers = {}
+def extractTiddlersFromHtml(html : str) -> Tiddlers :
+  tiddlers : Tiddlers = []
   return tiddlers

@@ -2,6 +2,6 @@
 A small personal server for TiddlyWiki.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
-from tiddlyserver.server import create_app
+from tiddlyServer.server import createApp

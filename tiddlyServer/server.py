@@ -1,5 +1,5 @@
 """
-An :py:mod:`flask` based webserver implementing (a bare-bones subset of) the
+An Starlette based webserver implementing (a bare-bones subset of) the
 TiddlyWeb API.
 """
 
@@ -10,14 +10,11 @@ import signal
 import sys
 # import yaml
 
-from waitress import serve, wasyncore
+from starlette.applications import Starlette
 
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
-from werkzeug.middleware.shared_data import SharedDataMiddleware
-
-from tiddlyserver.tiddly_wiki_app import create_app
-from tiddlyserver.default_app import createBaseApp
-from tiddlyserver.configuration import loadConfig
+from tiddlyServer.tiddlyWikiApp import createApp
+from tiddlyServer.defaultApp import createBaseApp
+from tiddlyServer.configuration import loadConfig
 
 # from tiddlyserver.wsgiLogger import WSGILogger
 
@@ -101,7 +98,7 @@ def main():
 
   tiddlyWikis = {}
   for aWiki in config['wikis'].values() :
-    tiddlyWikis[aWiki['url']] = create_app(aWiki)
+    tiddlyWikis[aWiki['url']] = createApp(aWiki)
 
   baseApp = createBaseApp(config)
 

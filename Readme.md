@@ -8,6 +8,7 @@ API.
 ***This version*** has been *copied* (not forked) from [Jonathan
 Heathcote's](https://github.com/mossblaser) original
 [mossblaser/tiddlyserver](https://github.com/mossblaser/tiddlyserver)
+since we have made extensive and non-compatible changes.
 
 **Features:**
 
@@ -27,7 +28,7 @@ Heathcote's](https://github.com/mossblaser) original
   [reference node.js TiddlyWiki server](https://tiddlywiki.com/#GettingStarted%20-%20Node.js))
 * Pre-populates TiddlyWiki with all tiddlers on first load, preventing lazy
   loading bugs and ensuring search is available immediately
-* **This version*** adds the pre-loading of tiddlers into the tiddlyWiki's html file.
+* ***This version*** adds the pre-loading of tiddlers into the tiddlyWiki's html file.
 * ***This version*** adds the ability to serve multiple tiddlyWikis from the same server.
 * Easy to use. Just run: `tiddlyserver [tiddler-directory]`
 
@@ -45,7 +46,7 @@ Installation
 
 You can install TiddlyServer using pip from PyPI like so:
 
-    $ pip install tiddlyserver
+    $ pip install https://github.com/stephengaito/tiddlyServer.git
 
 
 Standalone usage
@@ -105,11 +106,10 @@ Limitations
 Advanced usage notes
 --------------------
 
-### `empty.html` and upgrading TiddlyWiki
+### `empty.html`, `base.html` and upgrading TiddlyWiki
 
 TiddlyServer uses the file `empty.html` in the tiddler directory as the basis
-for the wiki sent when you request `/` from the server. If this file does not
-exist, TiddlyServer will create it for you.
+for the wiki sent when you request `/` from the server. If this file MUST exist.
 
 Note that as the name suggests, `empty.html` is an *empty* TiddlyWiki -- your
 tiddlers are always stored in separate `*.tid` files. Actually, `empty.html`
@@ -117,32 +117,25 @@ isn't quite empty but is an empty TiddlyWiki with the following plugins
 installed:
 
 * The official 'TiddlyWeb' plugin (which communicates with TiddlyServer)
-* The 'reenable-plugin-downloads' plugin which reenables the plugin downloading
-  UI in the TiddlyWiki control panel which TiddlyWeb disables.
+* Any other plugins you might want to use for your TiddlyWiki
 
 To create a suitable `empty.html` file (e.g. to upgrade to a newer version of
 TiddlyWiki) perform the following
 
 1. Download an `empty.html` file from [the TiddlyWiki website](https://tiddlywiki.com/#GettingStarted)
-2. Generate a version of the `reenable-plugin-downloads` plugin for that
-   version of TiddlyWiki using the following command (installed alongside
-   TiddlyServer):
-
-       $ make-tiddlywiki-reenable-plugin-downloads-plugin \
-           --empty-html /path/to/empty.html \
-           reenable-plugin-downloads.json
-
 3. Open `empty.html` in your browser
-4. Drag-and-drop the generated `reenable-plugin-downloads.json` plugin onto the
-   wiki and import it.
 5. Go to the control panel (gear icon) -> Plugins -> Get more plugins -> Open
    plugin library -> TiddlyWeb and click install.
 6. When prompted to save and reload the wiki, save the new wiki as `empty.html`
    and you're ready to go!
 
-Remember to commit your new `empty.html` file to the git repository and upgrade
-any plugins you might be using as necessary.
+Instead of using the `empty.html`, the TiddlyServer Pack command use the
+corresponding `base.html` as the basis of the "packed" TiddlyWiki (all
+tiddlers pre-packed into a single TiddlyWiki HTML file).
 
+The creation of this `base.html` file is the same as for the `empty.html`
+file ***except*** that you ***do not*** install the official 'TiddlyWeb'
+plugin.
 
 Similar projects
 ----------------

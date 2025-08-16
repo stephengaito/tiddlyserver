@@ -30,8 +30,6 @@ def checkAWiki(aKey, aWiki, config) :
     os.makedirs(aWiki['dir'], exist_ok=True)
   if 'desc' not in aWiki :
     aWiki['desc'] = ""
-  if 'useGit' not in aWiki :
-    aWiki['useGit'] = False
   if 'baseHtml' not in aWiki :
     aWiki['baseHtml'] = basePath(aWiki['dir'], 'base.html')
   if not os.path.isfile(aWiki['baseHtml']) :
