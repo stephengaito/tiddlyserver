@@ -2,14 +2,20 @@
 Routines for serialising and deserialising tiddlers on disk.
 """
 
-from typing import NoReturn
+from typing import NoReturn, AsyncGenerator
 
 import json
+import logging
 from pathlib import Path
 
-from tiddlyServer.types import Tiddler, Tiddlers
+import anyio
+
+from tiddlyServer.types import Tiddler, Tiddlers, TiddlerList
 from tiddlyServer.tiddlerFilename import titleToFilenameStub
 from tiddlyServer.tiddlerSafety import isTiddlerSafe
+from tiddlyServer.tiddlerEmbedding import embedTiddlersIntoEmptyHtml
+
+logger = logging.getLogger('tiddlyWiki')
 
 def serialiseTid(tiddler: Tiddler, filename : Path) -> None :
   """
@@ -39,9 +45,9 @@ def deserialiseTid(filename : Path, includeText : bool = True) -> Tiddler :
       tiddler["text"] = f.read()
 
   if 'title' not in tiddler :
-    print(f"No title found in [{filename}]")
+    logger.error(f"No title found in [{filename}]")
   elif not tiddler['title'] :
-    print(f"Empty title in [{filename}]")
+    logger.error(f"Empty title in [{filename}]")
 
   return tiddler
 
@@ -141,7 +147,7 @@ def readTiddler(directory : Path, title : str) -> Tiddler | NoReturn :
     f"No .tid or .json file could be found for tiddler '{title}'"
   )
 
-def readAllTiddlers(
+def readAllTiddlersBlocking(
   directory : Path, extraTiddlers : Tiddlers = [], includeText : bool = True
 ) -> Tiddlers :
   """
@@ -153,4 +159,40 @@ def readAllTiddlers(
     yield deserialiseTid(tidFilename, includeText)
   for jsonFilename in directory.glob("**/*.json"):
     yield deserialiseJsonPlusText(jsonFilename, includeText)
+
+def getExtraTiddlers(wikiUrl : str | None) -> TiddlerList :
+  extraTiddlers : TiddlerList = []
+  if wikiUrl :
+    customPathPrefix = {
+      'title': '$:/config/tiddlyweb/host',
+      'text':  f'$protocol$//$host${wikiUrl}/'
+    }
+    extraTiddlers.append(customPathPrefix)
+  return extraTiddlers
+
+def packTiddlyWikiBlocking(
+  emptyHtmlFilename : Path, tiddlerDir : Path, wikiUrl : str | None
+) -> str :
+
+  emptyHtml = emptyHtmlFilename.read_text()
+
+  extraTiddlers = getExtraTiddlers(wikiUrl)
+
+  tiddlers : TiddlerList = []
+  for aTiddler in readAllTiddlersBlocking(
+    tiddlerDir,
+    extraTiddlers=extraTiddlers
+  ) :
+    tiddlers.append(aTiddler)
+  tiddlers = sorted(
+    tiddlers,
+    key=lambda t: t.get("title", ""),
+  )
+
+  return embedTiddlersIntoEmptyHtml(emptyHtml, tiddlers)
+
+def unpackTiddlyWiki(
+  htmlFilename : Path, tiddlerDir : Path, baseHtmlFilename : Path
+) :
+  pass
 

@@ -5,67 +5,29 @@ TiddlyWeb API.
 
 from typing import Any
 
-import json
+import logging
 import os
 from pathlib import Path
-# import yaml
 
 from starlette.applications import Starlette
 from starlette.responses import Response, HTMLResponse, JSONResponse
 from starlette.requests import Request
 from starlette.routing import Route
 
-from tiddlyServer.types import Tiddler, TiddlerList, WikiDef
-
-from tiddlyServer.tiddlerSerDes import readAllTiddlers, readTiddler, \
+from tiddlyServer.types import Tiddler, WikiDef
+from tiddlyServer.tiddlerSerDes import readTiddler, readAllTiddlersBlocking, \
   writeTiddler, deleteTiddler
+from tiddlyServer.preLoader import reloadTiddlyWiki
 
-from tiddlyServer.tiddlerEmbedding import embedTiddlersIntoEmptyHtml
 from tiddlyServer.tiddlerHash import tiddlerHash
 
 # from tiddlyServer.wsgiLogger import WSGILogger
 
+logger = logging.getLogger('tiddlyWiki')
+
 appRoutes : list[Route] = []
 
-# @bp.before_request
-# def log_requests() :
-#   if has_request_context() :
-#     print(request.url)
-#     print(request.headers)
-
-def packTiddlyWiki(
-  emptyHtmlFilename : Path, tiddlerDir : Path, wikiUrl : str | None = None
-) -> str :
-
-  emptyHtml = emptyHtmlFilename.read_text()
-
-  extraTiddlers : TiddlerList = []
-  if wikiUrl :
-    customPathPrefix = {
-      'title': '$:/config/tiddlyweb/host',
-      'text':  f'$protocol$//$host${wikiUrl}/'
-    }
-    extraTiddlers.append(customPathPrefix)
-
-  # print(yaml.dump(customPathPrefix))
-
-  tiddlers = sorted(
-    readAllTiddlers(
-      tiddlerDir,
-      extraTiddlers=extraTiddlers
-    ),
-    key=lambda t: t.get("title", ""),
-  )
-
-  return embedTiddlersIntoEmptyHtml(emptyHtml, tiddlers)
-
-def unpackTiddlyWiki(
-  htmlFilename : Path, tiddlerDir : Path, baseHtmlFilename : Path
-) :
-  pass
-
-
-def corsOptions(request : Request) -> Response :
+async def corsOptions(request : Request) -> Response :
   return Response(
     "", headers={
       'Allow' : 'OPTIONS,GET,HEAD,PUT,DELETE'
@@ -76,31 +38,34 @@ appRoutes.append(Route(
   '/', endpoint=corsOptions, methods=['OPTIONS']
 ))
 
-def getIndex(request : Request) -> HTMLResponse :
-  """
-  Return a copy of the empty.html with all tiddlers in the tiddler directory
-  pre-loaded.
-  """
+async def getIndex(request : Request) -> HTMLResponse :
+  # Return a copy of the empty.html with all tiddlers in the tiddler directory
+  # pre-loaded.
+
   # print(current_app.config['wiki_url'])
   # print("appRoute: /")
 
-  html = packTiddlyWiki(
-    request.app.state.emptyHtmlFilename,
-    request.app.state.tiddlerDir,
-    wikiUrl=str(request.app.state.wikiUrl)
-  )
+  # html = packTiddlyWiki(
+  #   request.app.state.emptyHtmlFilename,
+  #   request.app.state.tiddlerDir,
+  #   str(request.app.state.wikiUrl)
+  # )
 
-  return HTMLResponse(html)
+  logger.info(f"Looking for {request.app.state.name} HTML")
+  while not request.app.state.html :
+    await request.app.state.wikiLoaded.wait()
+
+  logger.info(f"Found {request.app.state.name} HTML")
+  return HTMLResponse(request.app.state.html)
 
 appRoutes.append(Route(
   '/', endpoint=getIndex, methods=['GET']
 ))
 
-def getStatus(request : Request) -> JSONResponse :
-  """
-  Bare-minimum response which minimises UI cruft like usernames and login
-  screens.
-  """
+async def getStatus(request : Request) -> JSONResponse :
+  # Bare-minimum response which minimises UI cruft like usernames and login
+  # screens.
+
   return JSONResponse({
     "space": {"recipe": "all"},
     "username": "GUEST",
@@ -112,32 +77,30 @@ appRoutes.append(Route(
   '/status', endpoint=getStatus, methods=['GET']
 ))
 
-def getSkinnyTiddlers(request : Request) -> JSONResponse :
-  """
-  Return the JSON-ified non-text fields of all local tiddler files.
+async def getSkinnyTiddlers(request : Request) -> JSONResponse :
+  # Return the JSON-ified non-text fields of all local tiddler files.
+  #
+  # NB: We don't emulate the slightly quirky TiddlyWeb JSON format here since
+  # the TiddlyWiki implementation will cope just fine with a plain JSON object
+  # describing a tiddler's fields.
 
-  NB: We don't emulate the slightly quirky TiddlyWeb JSON format here since
-  the TiddlyWiki implementation will cope just fine with a plain JSON object
-  describing a tiddler's fields.
-  """
   tiddlerDir = request.app.state.tiddlerDir
-  skinnyTiddlers = list(readAllTiddlers(tiddlerDir, includeText=False))
+  skinnyTiddlers = list(readAllTiddlersBlocking(tiddlerDir, includeText=False))
   return JSONResponse(skinnyTiddlers)
 
 appRoutes.append(Route(
   '/recipes/all/tiddlers.json', endpoint=getSkinnyTiddlers, methods=['GET']
 ))
 
-def getTiddler(request : Request) -> Response :
-  """
-  Read a tiddler.
+async def getTiddler(request : Request) -> Response :
+  # Read a tiddler.
+  #
+  # NB: We assume the 'all' space (reported by the /status endpoint).
+  #
+  # NB: We don't emulate the slightly quirky TiddlyWeb JSON format here since
+  # the TiddlyWiki implementation will cope just fine with a plain JSON object
+  # describing a tiddler's fields.
 
-  NB: We assume the 'all' space (reported by the /status endpoint).
-
-  NB: We don't emulate the slightly quirky TiddlyWeb JSON format here since
-  the TiddlyWiki implementation will cope just fine with a plain JSON object
-  describing a tiddler's fields.
-  """
   title = request.path_params['title']
 
   tiddlerDir = request.app.state.tiddlerDir
@@ -190,6 +153,7 @@ async def putTiddler(request : Request) -> Response:
   headers = {"Etag": etag}
 
   if filesWritten :
+    reloadTiddlyWiki(request.app)
     return Response("", status_code=204, headers=headers)
   else :
     return Response(
@@ -202,16 +166,16 @@ appRoutes.append(Route(
   '/recipes/all/tiddlers/{title:path}', endpoint=putTiddler, methods=['PUT']
 ))
 
-def removeTiddler(request : Request) -> Response :
-  """
-  Delete a tiddler.
-  """
+async def removeTiddler(request : Request) -> Response :
+  # Delete a tiddler.
+
   title = request.path_params['title']
   tiddlerDir = request.app.state.tiddlerDir
 
   deletedFiles = deleteTiddler(tiddlerDir, title)
 
   if deletedFiles :
+    reloadTiddlyWiki(request.app)
     return HTMLResponse("")
   else:
     return Response(f"ERROR: could not delete {title}", status_code=404)
@@ -237,9 +201,12 @@ def createTiddlyWikiApp(aWiki : WikiDef) -> Starlette :
   """
 
   # make the tiddler_dir relative to the baseDir
-  tiddlerDir = aWiki['dir']
-  tiddlerUrl = aWiki['url']
-  print(f"Tiddler: {tiddlerUrl}\n  from dir: {tiddlerDir}")
+  tiddlerDir  = aWiki['dir']
+  tiddlerUrl  = aWiki['url']
+  tiddlerName = aWiki['name']
+
+  logger.info(f"Tiddler: {tiddlerUrl}")
+  logger.info(f"  from dir: {tiddlerDir}")
 
   # Create tiddler directory if it doesn't exist yet
   os.makedirs(tiddlerDir, exist_ok=True)
@@ -250,6 +217,7 @@ def createTiddlyWikiApp(aWiki : WikiDef) -> Starlette :
   tiddlerApp.state.baseHtmlFilename  = Path(aWiki['baseHtml']).resolve()
   tiddlerApp.state.tiddlerDir        = Path(tiddlerDir).resolve()
   tiddlerApp.state.wikiUrl           = tiddlerUrl
+  tiddlerApp.state.name              = tiddlerName
 
   return tiddlerApp
 

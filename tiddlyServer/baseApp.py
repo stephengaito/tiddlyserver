@@ -1,13 +1,11 @@
 
 from typing import cast, Any
 
-import contextlib
+import logging
 from pathlib import Path
 
 from markdown import markdown
 from jinja2 import Template
-
-from anyio import create_task_group
 
 from starlette.applications import Starlette
 from starlette.routing import Route, Mount
@@ -17,27 +15,9 @@ from starlette.staticfiles import StaticFiles
 
 from tiddlyServer.types import WikiDefs
 from tiddlyServer.tiddlyWikiApp import createTiddlyWikiApp
+from tiddlyServer.preLoader import appLifespan
 
-async def preloadTiddlyWiki(wikiApp) :
-  pass
-  # using the wikiApp and its associated state...
-  # wait for the wikiLoadEvent
-  # clear the wikiLoadEvent
-  # load the wiki
-  # assert the wikiLoadedEvent
-  # do it all again
-
-@contextlib.asynccontextmanager
-async def appLifespan(app):
-  async with create_task_group() as tg :
-    print("Run at startup!")
-    with aWikiApp in app.state.wikiApps :
-      pass
-      # with each app, add wikiLoaded, wikiNeedsLoading events
-      # assert the wikiNeedsLoading event
-      # and then start the preloadTiddlyWiki for aWikiApp
-    yield
-    print("Run on shutdown!")
+logger = logging.getLogger('tiddlyWiki')
 
 def createBaseApp(
   baseDir : Path, config : dict[str, Any]
@@ -78,7 +58,7 @@ def createBaseApp(
   staticDir = Path(staticDef['dir'])
   if not staticDir.is_absolute() :
     staticDir = baseDir / staticDef['dir']
-  print(f"StaticDir: {staticDir}")
+  logger.info(f"StaticDir: {staticDir}")
 
   if not staticDir.is_dir() :
     staticDir.mkdir(parents=True)
@@ -91,12 +71,15 @@ def createBaseApp(
     )
   )
 
+  wikiApps : list[Starlette] = []
   for aWikiName, aWiki in wikis.items() :
     aWiki['desc'] = markdown(aWiki['desc'])
+    theWikiApp = createTiddlyWikiApp(aWiki)
+    wikiApps.append(theWikiApp)
     routes.append(
       Mount(
         aWiki['url'],
-        app=createTiddlyWikiApp(aWiki),
+        app=theWikiApp,
         name=aWikiName
       )
     )
@@ -106,5 +89,6 @@ def createBaseApp(
   )
 
   app = Starlette(routes=routes, lifespan=appLifespan)
+  app.state.wikiApps = wikiApps
   return app
 

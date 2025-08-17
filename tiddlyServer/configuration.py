@@ -27,9 +27,10 @@ def checkAWiki(
   baseDir   : str = cast(str, config['baseDir'])
   baseHtml  : str = cast(str, config['baseHtml'])
   emptyHtml : str = cast(str, config['emptyHtml'])
-
   if 'title' not in aWiki :
     wikiDie("The title key must be supplied", aWiki)
+  if 'name' not in aWiki :
+    aWiki['name'] = aKey
   if 'url' not in aWiki :
     aWiki['url'] = '/' + aKey
   if 'dir' not in aWiki :

@@ -11,7 +11,8 @@ import sys
 import yaml
 
 from tiddlyServer.configuration import loadConfig
-from tiddlyServer.tiddlyWikiApp import packTiddlyWiki, unpackTiddlyWiki
+from tiddlyServer.tiddlerSerDes import packTiddlyWikiBlocking, \
+  unpackTiddlyWiki
 
 class ExitNow(Exception) :
   pass
@@ -30,8 +31,6 @@ def sigtermHandler(signum, frame) :
   # our database update/insert operations should be protected.
 
   raise ExitNow()
-
-  sys.exit(0)
 
 shutDownExceptions = (ExitNow, KeyboardInterrupt, SystemExit)
 
@@ -90,8 +89,8 @@ def pack() :
     sys.exit(1)
 
   theWiki = config['wikis'][args.wikiKey]
-  html = packTiddlyWiki(
-    Path(theWiki['baseHtml']), Path(theWiki['dir'])
+  html = packTiddlyWikiBlocking(
+    Path(theWiki['baseHtml']), Path(theWiki['dir']), None
   )
 
   with open(args.htmlPath, 'w') as htmlFile :

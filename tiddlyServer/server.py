@@ -7,41 +7,38 @@ import argparse
 import os
 from pathlib import Path
 import signal
-import sys
-# import yaml
 
 import uvicorn
+from uvicorn.logging import DefaultFormatter
 
 from starlette.middleware.cors import CORSMiddleware
 
 from tiddlyServer.baseApp import createBaseApp
 from tiddlyServer.configuration import loadConfig
+from tiddlyServer.exceptions import ExitNow, shutDownExceptions
+
+##################################################
+# Logging BLACK MAGIC!!!
+import logging
+logger = logging.getLogger('tiddlyWiki')
+logger.setLevel(logging.INFO)
+consoleLogger = logging.StreamHandler()
+consoleLogger.setLevel(logging.INFO)
+consoleLogger.setFormatter(DefaultFormatter(
+  fmt="%(levelprefix)s %(message)s",
+  use_colors=True
+))
+logger.addHandler(consoleLogger)
+#
+###################################################
 
 # from tiddlyserver.wsgiLogger import WSGILogger
 
 # from logging.config import dictConfig
 
-class ExitNow(Exception) :
-  pass
-
 def sigtermHandler(signum, frame) :
-
-  # simply call sys.exit as this will raise a SystemExit exception which
-  # is then "handled" by Waitress and if we care, can be handled by our
-  # app.
-
-  # consider sending and waiting for a Blinker signal followed by an
-  # ExitNow exception. This would provide a softer shutdown sequence.
-
-  # try raising the more specific ExitNow exception defined by
-  # waitress.wasyncore.... most of our application does not care... BUT
-  # our database update/insert operations should be protected.
-
+  # we raise our own more specific ExitNow exception.
   raise ExitNow()
-
-  sys.exit(0)
-
-shutDownExceptions = (ExitNow, KeyboardInterrupt, SystemExit)
 
 def main():
 
@@ -97,7 +94,7 @@ def main():
   if args.port : config['port'] = int(args.port)
 
   baseDir = Path(baseDir)
-  print(f"BaseDir: {baseDir}")
+  logger.info(f"BaseDir: {baseDir}")
 
   baseApp = createBaseApp(baseDir, config)
 
@@ -106,8 +103,8 @@ def main():
   #   keys=['PATH_INFO']
   # )
 
-  print("\nYour Uvicorn will serve you on:")
-  print(f"  http://{config['host']}:{config['port']}/")
+  logger.info("Your Uvicorn will serve you on:")
+  logger.info(f"  http://{config['host']}:{config['port']}/")
 
   try :
     uvicorn.run(
@@ -122,7 +119,7 @@ def main():
   except shutDownExceptions :
     pass
 
-  print("\nYour Uvicorn has left")
+  logger.info("Your Uvicorn has left")
 
 if __name__ == "__main__":
   main()
