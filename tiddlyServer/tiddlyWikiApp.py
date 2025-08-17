@@ -64,6 +64,18 @@ def unpackTiddlyWiki(
 ) :
   pass
 
+
+def corsOptions(request : Request) -> Response :
+  return Response(
+    "", headers={
+      'Allow' : 'OPTIONS,GET,HEAD,PUT,DELETE'
+    }
+  )
+
+appRoutes.append(Route(
+  '/', endpoint=corsOptions, methods=['OPTIONS']
+))
+
 def getIndex(request : Request) -> HTMLResponse :
   """
   Return a copy of the empty.html with all tiddlers in the tiddler directory
@@ -80,7 +92,9 @@ def getIndex(request : Request) -> HTMLResponse :
 
   return HTMLResponse(html)
 
-appRoutes.append(Route('/', getIndex))
+appRoutes.append(Route(
+  '/', endpoint=getIndex, methods=['GET']
+))
 
 def getStatus(request : Request) -> JSONResponse :
   """
@@ -94,7 +108,9 @@ def getStatus(request : Request) -> JSONResponse :
     "anonymous": True,
   })
 
-appRoutes.append(Route('/status', getStatus))
+appRoutes.append(Route(
+  '/status', endpoint=getStatus, methods=['GET']
+))
 
 def getSkinnyTiddlers(request : Request) -> JSONResponse :
   """
@@ -108,9 +124,11 @@ def getSkinnyTiddlers(request : Request) -> JSONResponse :
   skinnyTiddlers = list(readAllTiddlers(tiddlerDir, includeText=False))
   return JSONResponse(skinnyTiddlers)
 
-appRoutes.append(Route('/recipes/all/tiddlers.json', getSkinnyTiddlers))
+appRoutes.append(Route(
+  '/recipes/all/tiddlers.json', endpoint=getSkinnyTiddlers, methods=['GET']
+))
 
-def getTiddler(request : Request, title : str) -> Response :
+def getTiddler(request : Request) -> Response :
   """
   Read a tiddler.
 
@@ -120,6 +138,8 @@ def getTiddler(request : Request, title : str) -> Response :
   the TiddlyWiki implementation will cope just fine with a plain JSON object
   describing a tiddler's fields.
   """
+  title = request.path_params['title']
+
   tiddlerDir = request.app.state.tiddlerDir
 
   try:
@@ -127,8 +147,14 @@ def getTiddler(request : Request, title : str) -> Response :
   except FileNotFoundError:
     return Response("", status_code=404)
 
-async def putTiddler(request : Request, title : str) -> Response:
+appRoutes.append(Route(
+  '/recipes/all/tiddlers/{title:path}', endpoint=getTiddler, methods=['GET']
+))
+
+async def putTiddler(request : Request) -> Response:
   # Store (or modify) a tiddler.
+
+  title = request.path_params['title']
 
   tiddlerDir = request.app.state.tiddlerDir
 
@@ -172,19 +198,8 @@ async def putTiddler(request : Request, title : str) -> Response:
       headers=headers
     )
 
-async def getPutTiddler(request : Request) -> Response :
-  title = request.path_params['title']
-  if request.method == 'GET' :
-    return getTiddler(request, title)
-  elif request.method == 'PUT' :
-    return await putTiddler(request, title)
-  else :
-    return Response(
-      f"ERROR unknown request method : {request.method}", status_code=404
-    )
-
 appRoutes.append(Route(
-  '/recipes/all/tiddlers/{title:path}', getPutTiddler, methods=['GET', 'PUT']
+  '/recipes/all/tiddlers/{title:path}', endpoint=putTiddler, methods=['PUT']
 ))
 
 def removeTiddler(request : Request) -> Response :
@@ -202,7 +217,7 @@ def removeTiddler(request : Request) -> Response :
     return Response(f"ERROR: could not delete {title}", status_code=404)
 
 appRoutes.append(Route(
-  '/bags/bag/tiddlers/{title:path}', removeTiddler, methods=["DELETE"]
+  '/bags/bag/tiddlers/{title:path}', endpoint=removeTiddler, methods=["DELETE"]
 ))
 
 def createTiddlyWikiApp(aWiki : WikiDef) -> Starlette :
@@ -237,3 +252,4 @@ def createTiddlyWikiApp(aWiki : WikiDef) -> Starlette :
   tiddlerApp.state.wikiUrl           = tiddlerUrl
 
   return tiddlerApp
+

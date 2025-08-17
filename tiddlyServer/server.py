@@ -12,6 +12,8 @@ import sys
 
 import uvicorn
 
+from starlette.middleware.cors import CORSMiddleware
+
 from tiddlyServer.baseApp import createBaseApp
 from tiddlyServer.configuration import loadConfig
 
@@ -109,7 +111,11 @@ def main():
 
   try :
     uvicorn.run(
-      baseApp,
+      CORSMiddleware(
+        app=baseApp,
+        allow_origins=['*'],
+        allow_methods=['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS']
+      ),
       host=config['host'],
       port=int(config['port'])
     )
