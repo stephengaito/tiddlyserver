@@ -84,7 +84,7 @@ Description=Force the preloading of the {aWiki} tiddlyWiki
 
 [Service]
 ExecStart=curl --silent --output /dev/null \
-  http://{config['host']}:{config['port']}/{aWiki}/preload
+  http://{config['host']}:{config['port']}/{aWiki}/reload
 
 [Install]
 WantedBy=default.target

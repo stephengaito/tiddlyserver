@@ -77,6 +77,14 @@ appRoutes.append(Route(
   '/status', endpoint=getStatus, methods=['GET']
 ))
 
+async def getReloadTiddlyWiki(request : Request ) -> Response :
+  reloadTiddlyWiki(request.app)
+  return Response("done")
+
+appRoutes.append(Route(
+  '/reload', endpoint=getReloadTiddlyWiki, methods=['GET']
+))
+
 async def getSkinnyTiddlers(request : Request) -> JSONResponse :
   # Return the JSON-ified non-text fields of all local tiddler files.
   #
