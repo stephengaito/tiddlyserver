@@ -26,6 +26,7 @@ CMD_SCRIPT
 installScript tiddlyServer
 installScript tiddlyPacker
 installScript tiddlyUnpacker
+installScript tiddlyReloader
 
 echo ""
 echo "The editable TiddlyServer commands haver been created"

@@ -34,7 +34,7 @@ def sigtermHandler(signum, frame) :
 
 shutDownExceptions = (ExitNow, KeyboardInterrupt, SystemExit)
 
-def getArgsLoadConfig(desc) :
+def getArgsLoadConfig(desc, addHtmlPath=True) :
   signal.signal(signal.SIGTERM, sigtermHandler)
 
   parser = argparse.ArgumentParser(description=desc)
@@ -61,13 +61,14 @@ def getArgsLoadConfig(desc) :
       """
   )
 
-  parser.add_argument(
-    'htmlPath',
-    type=Path,
-    help="""
-      The path to the tiddlyWiki html file to be (un)packed.
-    """
-  )
+  if addHtmlPath :
+    parser.add_argument(
+      'htmlPath',
+      type=Path,
+      help="""
+        The path to the tiddlyWiki html file to be (un)packed.
+      """
+    )
   args = parser.parse_args()
 
   baseDir = os.path.abspath(args.baseDir)
@@ -99,7 +100,7 @@ def pack() :
 def unpack() :
   print("Unpacking")
 
-  config = getArgsLoadConfig("""
+  args, config = getArgsLoadConfig("""
       A tool to unpack an existing tiddlyWiki into a tiddlyServer's
       collection of tiddlers.
   """)
@@ -109,4 +110,24 @@ def unpack() :
     html = htmlFile.read()
 
   unpackTiddlyWiki(config, html)
+
+def reload() :
+  print("Unpacking")
+
+  args, config = getArgsLoadConfig("""
+      A tool to tell the tiddlyServer to reload a tiddlyWiki.
+  """,
+  addHtmlPath=False)
+
+  theWiki = config['wikis'][args.wikiKey]
+  
+  # see: https://stackoverflow.com/questions/645312/what-is-the-quickest-way-to-http-get-in-python  # noqa
+  try :
+    import urllib.request
+    contents = urllib.request.urlopen(
+      f"http://{config['host']}:{config['port']}{theWiki['url']}/reload"
+    ).read()
+  except Exception as err :
+    print(f"Could not connect to {config['host']}:{config['port']} {args.wikiKey}")
+    print(repr(err))
 
