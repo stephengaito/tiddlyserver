@@ -3,7 +3,7 @@ import contextlib
 from datetime import datetime
 
 from anyio import create_task_group, Event, \
-  TASK_STATUS_IGNORED, to_thread, CancelScope
+  TASK_STATUS_IGNORED, to_thread, CancelScope, Lock
 from anyio.abc import TaskStatus
 
 from starlette.applications import Starlette
@@ -35,28 +35,32 @@ async def preloadTiddlyWiki(
     try :
       logger.info(f"Waiting to load {wikiApp.state.name}")
       await wikiApp.state.wikiNeedsLoading.wait()
-      wikiApp.state.wikiNeedsLoading = Event()  # essentially clear the event
-      wikiApp.state.cancelLoading    = None
+      wikiApp.state.cancelLoading = None
       timeStart = datetime.now()
+      wasCancelled = False
       logger.info(f"loading {wikiApp.state.name}")
-      with CancelScope() as cancelScope :
-        wikiApp.state.html          = None
-        wikiApp.state.cancelLoading = cancelScope
-        wikiApp.state.html = await to_thread.run_sync(
-          packTiddlyWikiBlocking,
-          wikiApp.state.emptyHtmlFilename,
-          wikiApp.state.tiddlerDir,
-          str(wikiApp.state.wikiUrl)
-        )
-        timeTaken = datetime.now() - timeStart
-        if cancelScope.cancel_called :
-          logger.info(
-            f"cancelled loading {wikiApp.state.name} took {timeTaken}"
+      async with wikiApp.state.htmlLock :
+        wikiApp.state.html = None
+        with CancelScope() as cancelScope :
+          wikiApp.state.cancelLoading = cancelScope
+          wikiApp.state.html = await to_thread.run_sync(
+            packTiddlyWikiBlocking,
+            wikiApp.state.emptyHtmlFilename,
+            wikiApp.state.tiddlerDir,
+            str(wikiApp.state.wikiUrl)
           )
-          wikiApp.state.wikiNeedsLoading.set()
-        else :
-          logger.info(f"loaded {wikiApp.state.name} took {timeTaken}")
-          wikiApp.state.wikiLoaded.set()
+      wikiApp.state.cancelLoading = None
+      wikiApp.state.wikiNeedsLoading = Event()  # essentially clear the event
+      timeTaken = datetime.now() - timeStart
+      if wasCancelled :
+        logger.info(
+          f"cancelled loading {wikiApp.state.name} took {timeTaken}"
+        )
+        wikiApp.state.wikiNeedsLoading.set()
+      else :
+        logger.info(f"loaded {wikiApp.state.name} took {timeTaken}")
+        wikiApp.state.wikiLoaded.set()
+        wikiApp.state.wikiLoaded = Event()
     except shutDownExceptions :
       break
 
@@ -71,6 +75,7 @@ async def appLifespan(app):
       aWikiApp.state.html = None
       aWikiApp.state.wikiNeedsLoading = Event()
       aWikiApp.state.wikiLoaded       = Event()
+      aWikiApp.state.htmlLock         = Lock()
       aWikiApp.state.wikiNeedsLoading.set()
       await tg.start(preloadTiddlyWiki, aWikiApp)
     yield

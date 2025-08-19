@@ -52,11 +52,15 @@ async def getIndex(request : Request) -> HTMLResponse :
   # )
 
   logger.info(f"Looking for {request.app.state.name} HTML")
-  while not request.app.state.html :
-    await request.app.state.wikiLoaded.wait()
+  html = None
+  while True :
+    async with request.app.state.htmlLock :
+      if not request.app.state.wikiNeedsLoading.is_set() :
+        html = request.app.state.html
+        if html : break
 
   logger.info(f"Found {request.app.state.name} HTML")
-  return HTMLResponse(request.app.state.html)
+  return HTMLResponse(html)
 
 appRoutes.append(Route(
   '/', endpoint=getIndex, methods=['GET']
@@ -141,8 +145,10 @@ async def putTiddler(request : Request) -> Response:
     if isinstance(aValue, str) :
       tiddler[aKey] = aValue
 
-  if "tags" in tiddler:
-    tiddler["tags"] = " ".join(f"[[{tag}]]" for tag in tiddler.get("tags", []))
+  if "tags" in tiddlerDict:
+    tiddler["tags"] = " ".join(
+      f"[[{tag}]]" for tag in tiddlerDict.get("tags", [])
+    )
 
   # Mandatory for TiddlyWeb but (but unused by this implementation)
   tiddler["bag"] = "bag"
