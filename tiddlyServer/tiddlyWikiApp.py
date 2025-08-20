@@ -98,6 +98,7 @@ async def getSkinnyTiddlers(request : Request) -> JSONResponse :
 
   tiddlerDir = request.app.state.tiddlerDir
   skinnyTiddlers = list(readAllTiddlersBlocking(tiddlerDir, includeText=False))
+  reloadTiddlyWiki(request.app)
   return JSONResponse(skinnyTiddlers)
 
 appRoutes.append(Route(
