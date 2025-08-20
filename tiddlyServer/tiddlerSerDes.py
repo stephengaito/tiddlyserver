@@ -33,16 +33,20 @@ def deserialiseTid(filename : Path, includeText : bool = True) -> Tiddler :
   Deserialise a tiddler from a .tid file.
   """
   tiddler : Tiddler = {}
-  with filename.open("r", encoding="utf-8") as f:
-    for line in f:
-      field, colon, value = line.partition(":")
-      if colon:
-        tiddler[field.strip()] = value.strip()
-      else:
-        break
+  try :
+    with filename.open("r", encoding="utf-8") as f:
+      for line in f:
+        field, colon, value = line.partition(":")
+        if colon:
+          tiddler[field.strip()] = value.strip()
+        else:
+          break
 
-    if includeText :
-      tiddler["text"] = f.read()
+      if includeText :
+        tiddler["text"] = f.read()
+  except FileNotFoundError as err :
+    logger.error(f"FileNotFound: {filename}")
+    logger.error(repr(err))
 
   if 'title' not in tiddler :
     logger.error(f"No title found in [{filename}]")
